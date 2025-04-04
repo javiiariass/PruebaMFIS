@@ -16,6 +16,10 @@ attributes
   dia : Integer
   mes : Integer
   anyo : Integer
+ 
+operations
+  fechaActual()
+  : Date = Date.allInstances()->any(true)
 end
 	
 class Usuario
@@ -153,9 +157,10 @@ association ComprobadoPor between
   Veterinario [0..*] role veterinario
 end
 
+--association UsuariosInscritos between
 association InscripcionEvento between
   Evento [0..*] role evento
-  Mascota [0..*] role mascotaInscrito
+  Mascota [0..*] role mascotaInscrita
 end
 
 association MascotaEnAdopcion between
@@ -198,7 +203,8 @@ context Mascota
 inv vacunasParaAdopcion: self.anuncioAdopcion->notEmpty() implies self.vacunasAlDia=true 
 
 context Mascota
-inv noEventosSimultaneos: self.evento->forAll(e1, e2 | e1 <> e2 implies e1.fechaEvento <> e2.fechaEvento)
+inv noEventosSimultaneos: self.evento->isUnique(fechaEvento)
+--inv noEventosSimultaneos: self.evento->forAll(e1, e2 | e1 <> e2 implies e1.nParticipantes <> e2.nParticipantes)
 
 
 context Producto
@@ -221,7 +227,7 @@ context Mascota
 inv noAmistadConsigoMismo: not self.mascota1->includes(self)
 
 context Mascota
-inv noEventosSiSuspendida: self.estadoPerfil='Suspendido' implies self.evento->isEmpty()=true
+inv noEventosSiSuspendida: self.estadoPerfil='Suspendido' implies self.evento->isEmpty()
 
 
 context AnuncioAdopcion
@@ -234,7 +240,7 @@ inv eventoConfirmado:  estadoConfirmacion = true implies self.nParticipantes >= 
 
 context Evento
 inv eventoFuturo: 
-
+  
   self.fechaEvento.anyo > self.fechaPublicacion.anyo or 
   (self.fechaEvento.anyo = self.fechaPublicacion.anyo and self.fechaEvento.mes > self.fechaPublicacion.mes) or 
   (self.fechaEvento.anyo = self.fechaPublicacion.anyo and self.fechaEvento.mes = self.fechaPublicacion.mes and self.fechaEvento.dia >= (self.fechaPublicacion.dia + 7))
@@ -243,10 +249,11 @@ inv eventoFuturo:
 -- y los participantes son menores -> se cancela
 context Evento
 inv eventosuspendido: 
-  -- Utilizamos directamente los valores de la fecha fija: 3/4/2025
+  let fechaActual = Date.allInstances()->any(true) in
   (self.fechaEvento.anyo * 365 + self.fechaEvento.mes * 30 + self.fechaEvento.dia) 
-  - (2025 * 365 + 4 * 30 + 3) < 7 -- Comparamos con una fecha fija que debe ser modificada aqui 
-  and self.nParticipantes <= 6 implies estadoConfirmacion = false
+  - (fechaActual.anyo * 365 + fechaActual.mes * 30 + fechaActual.dia) < 7
+  and  self.nParticipantes <= 6 implies estadoConfirmacion = false 
+
 
 context Mascota
 inv gustosMinimos:
@@ -257,16 +264,13 @@ inv IndiceFiabilidadValido :
 (veterinario->size()/self.numRecomendaciones)*100 >80 
 implies self.esAprobadoVeterinariamente=true
 
-
--- una vez "probado" el producto, lo certifica
-context Veterinario::certificarProducto(producto: Producto) 
-  pre compruebaExistencias: self.producto->exists(p : Producto | p.idProducto = producto.idProducto) = true
-
+context Veterinario::certificarProducto(producto: Producto)
+  pre compruebaExistencias: Producto.allInstances->exists(p: Producto| p.idProducto = producto.idProducto)=true
   post post1: producto.numRecomendaciones
   = producto.numRecomendaciones@pre + 1
 
 context Evento::cancelarEvento()
-  pre eventoCancelado: self.estadoConfirmacion = false
+  pre eventoCancelado: self.estadoConfirmacion = true
 
   --post eventoEliminado: Evento.allInstances()->excludes(self)
   post eventoEliminado2: self.oclIsUndefined()
@@ -291,6 +295,11 @@ context Mascota::esCompatible(otraMascota:Mascota) : Boolean
   pre: otraMascota.estadoPerfil <> 'Suspendido' and self.estadoPerfil <> 'Suspendido'
  
  
+
+
+  
+
+
 
 
   -- Cambios hecho hoy
